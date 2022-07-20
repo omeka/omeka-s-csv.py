@@ -1,14 +1,22 @@
 #! /usr/bin/python
 
+"""omeka-s-csv.py
+
+Dump metadata from the Omeka S API into CSV files.
+
+Based on omekacsv.py for Omeka Classic, itself based on Caleb McDaniel's
+original Python CSV file generator: https://github.com/wcaleb/omekadd
+"""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
-from collections import defaultdict
 import csv
 import json
 import math
 import time
+
 try:
     import readline
 except ImportError:
@@ -22,23 +30,11 @@ except ImportError:
     from urllib import urlencode
     from urllib2 import urlopen, URLError, HTTPError
 
-'''
-Dump metadata from Omeka S into CSV.
-
-Based on omekacsv.py for Omeka Classic, itself based on Caleb McDaniel's
-original Python CSV file generator: https://github.com/wcaleb/omekadd
-'''
-
 try:
     input = raw_input
-except NameError:
-    pass
-
-try:
-    unicode
+    str = unicode
     py2 = True
 except NameError:
-    unicode = str
     py2 = False
 
 def request(endpoint, resource, query={}):
@@ -145,10 +141,10 @@ for resource in resources:
                         csv_row['thumbnail_' + thumbnail_type] = url
             elif is_internal_link(v):
                 # single internal links
-                csv_row[k] = unicode(v['o:id'])
+                csv_row[k] = str(v['o:id'])
             elif type(v) is list and is_internal_link(v[0]):
                 # multiple internal links
-                csv_row[k] = multivalue_separator.join([unicode(resource['o:id']) for resource in v])
+                csv_row[k] = multivalue_separator.join([str(res['o:id']) for res in v])
             elif is_date(v):
                 csv_row[k] = v['@value']
             elif is_metadata_property(v):
@@ -159,7 +155,7 @@ for resource in resources:
                     if '@value' in value:
                         literals.append(value['@value'])
                     elif 'value_resource_id' in value:
-                        resources.append(unicode(value['value_resource_id']))
+                        resources.append(str(value['value_resource_id']))
                     elif '@id' in value:
                         uris.append(value['@id'])
                 if literals:
@@ -169,8 +165,8 @@ for resource in resources:
                 if uris:
                     csv_row[k + '_uris'] = multivalue_separator.join(uris)
             elif type(v) is int or type(v) is float or type(v) is bool:
-                csv_row[k] = unicode(v)
-            elif isinstance(v, unicode):
+                csv_row[k] = str(v)
+            elif isinstance(v, str):
                 csv_row[k] = v
 
         for k in csv_row.keys():
@@ -178,17 +174,18 @@ for resource in resources:
         csv_rows.append(csv_row)
 
     fields = sorted(fields, key=lambda field: (field != 'id', field))
+    filename = resource + '.csv'
     if (py2):
-        o = open(resource + '_output.csv', 'wb')
+        o = open(filename, 'wb')
         c = csv.DictWriter(o, [f.encode('utf-8', 'replace') for f in fields], extrasaction='ignore')
         c.writeheader()
         for row in csv_rows:
-            c.writerow({k:v.encode('utf-8', 'replace') for k,v in row.items() if isinstance(v, unicode)})
+            c.writerow({k:v.encode('utf-8', 'replace') for k,v in row.items() if isinstance(v, str)})
     else:
-        o = open(resource + '_output.csv', 'w', encoding='utf-8', newline='')
+        o = open(filename, 'w', encoding='utf-8', newline='')
         c = csv.DictWriter(o, fields, extrasaction='ignore')
         c.writeheader()
         for row in csv_rows:
             c.writerow(row)
     o.close()
-    print('File created: ' + resource + '.csv')
+    print('File created: ' + filename)
