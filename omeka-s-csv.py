@@ -153,7 +153,7 @@ for resource in resources:
                 uris = []
                 for value in v:
                     if '@value' in value:
-                        literals.append(value['@value'])
+                        literals.append(str(value['@value']))
                     elif 'value_resource_id' in value:
                         resources.append(str(value['value_resource_id']))
                     elif '@id' in value:
