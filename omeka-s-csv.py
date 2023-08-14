@@ -18,11 +18,6 @@ import math
 import time
 
 try:
-    import readline
-except ImportError:
-    pass
-
-try:
     from urllib.parse import urlencode
     from urllib.request import urlopen
     from urllib.error import URLError, HTTPError
