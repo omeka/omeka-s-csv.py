@@ -12,6 +12,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
+from collections import defaultdict
 import csv
 import json
 import math
@@ -70,6 +71,15 @@ def get_all_pages(endpoint, resource):
         time.sleep(1)
     return data
 
+def get_value_data(value):
+    if '@value' in value:
+        return 'literal', str(value['@value'])
+    if 'value_resource_id' in value:
+        return 'resource', str(value['value_resource_id'])
+    if '@id' in value:
+        return 'uri', value['@id']
+    return None, None
+
 def is_internal_link(val):
     return type(val) is dict and len(val) == 2 and '@id' in val and 'o:id' in val
 def is_metadata_property(val):
@@ -98,7 +108,7 @@ if not multivalue_separator:
 response, content = request(endpoint, 'api_resources')
 available_resources = [resource['o:id'] for resource in json.loads(content)]
 
-resources = ['items', 'item_sets', 'media']
+resources = ['items', 'item_sets', 'media', 'collecting_items']
 for resource in resources:
     if (resource not in available_resources):
         continue
@@ -143,22 +153,52 @@ for resource in resources:
             elif is_date(v):
                 csv_row[k] = v['@value']
             elif is_metadata_property(v):
-                literals = []
-                resources = []
-                uris = []
+                values_by_type = {
+                    'literal': [],
+                    'resource': [],
+                    'uri': [],
+                }
+                value_type_suffixes = {
+                    'literal': '',
+                    'resource': '_resources',
+                    'uri': '_uris',
+                }
+                # infinite defaultdict
+                def dd():
+                    return defaultdict(dd)
+                annotation_texts = dd()
                 for value in v:
-                    if '@value' in value:
-                        literals.append(str(value['@value']))
-                    elif 'value_resource_id' in value:
-                        resources.append(str(value['value_resource_id']))
-                    elif '@id' in value:
-                        uris.append(value['@id'])
-                if literals:
-                    csv_row[k] = multivalue_separator.join(literals)
-                if resources:
-                    csv_row[k + '_resources'] = multivalue_separator.join(resources)
-                if uris:
-                    csv_row[k + '_uris'] = multivalue_separator.join(uris)
+                    value_type, value_val = get_value_data(value)
+
+                    if not value_type:
+                        continue;
+
+                    values_by_type[value_type].append(value_val)
+                    value_index = len(values_by_type[value_type]) - 1
+
+                    if '@annotation' in value:
+                        for annotation_property, annotations in value['@annotation'].items():
+                            for annotation_index, annotation in enumerate(annotations):
+                                annotation_type, annotation_val = get_value_data(annotation)
+                                if not annotation_type:
+                                    continue;
+
+                                annotation_texts[value_type][annotation_property][annotation_type][annotation_index][value_index] = annotation_val
+
+                for value_type, values in values_by_type.items():
+                    csv_row[k + value_type_suffixes[value_type]] = multivalue_separator.join(values)
+
+                for anno_value_type, anno_props in annotation_texts.items():
+                    for anno_prop, anno_types in anno_props.items():
+                        for anno_type, anno_indexes in anno_types.items():
+                            for anno_index, anno_value_indexes in anno_indexes.items():
+                                anno_values = [''] * len(values_by_type[anno_value_type])
+                                for anno_value_index, anno_val in anno_value_indexes.items():
+                                    anno_values[anno_value_index] = anno_val
+                                anno_csv_key = k + value_type_suffixes[anno_value_type] + '_annotation_' + anno_prop + value_type_suffixes[anno_type]
+                                if (anno_index > 0):
+                                    anno_csv_key += '_' + str(anno_index + 1)
+                                csv_row[anno_csv_key] = multivalue_separator.join(anno_values)
             elif type(v) is int or type(v) is float or type(v) is bool:
                 csv_row[k] = str(v)
             elif isinstance(v, str):
