@@ -13,18 +13,22 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 from collections import defaultdict
+import argparse
 import csv
 import json
 import math
 import time
+import sys
 
 try:
     from urllib.parse import urlencode
+    from urllib.parse import parse_qsl
     from urllib.request import urlopen
     from urllib.error import URLError, HTTPError
 except ImportError:
     from urllib import urlencode
     from urllib2 import urlopen, URLError, HTTPError
+    from urlparse import parse_qsl
 
 try:
     input = raw_input
@@ -33,23 +37,21 @@ try:
 except NameError:
     py2 = False
 
-def request(endpoint, resource, query={}):
+def request(endpoint, resource, query):
     url = endpoint + "/" + resource
-    if key_identity is not None and key_credential is not None:
-        query["key_identity"] = key_identity
-        query["key_credential"] = key_credential
     url += "?" + urlencode(query)
 
     response = urlopen(url)
     return response.info(), response.read()
 
-def get_all_pages(endpoint, resource):
+def get_all_pages(endpoint, resource, query):
     data = []
     page = 1
     # default pages to 1 before we see the omeka-s-total-results header
     pages = 1
     while page <= pages:
-        response, content = request(endpoint, resource, {'page': str(page)})
+        query['page'] = str(page)
+        response, content = request(endpoint, resource, query)
         content_list = json.loads(content)
         data.extend(content_list)
 
@@ -87,36 +89,11 @@ def is_metadata_property(val):
 def is_date(val):
     return type(val) is dict and len(val) == 2 and '@value' in val and '@type' in val and val['@type'] == 'http://www.w3.org/2001/XMLSchema#dateTime'
 
-endpoint = ''
-while not endpoint:
-    endpoint = input('Enter your Omeka API endpoint\n')
-endpoint = endpoint.strip().rstrip('/')
-
-key_identity = input('\nIf you are using an API key, please enter the key_identity now. Otherwise press Enter.\n')
-if key_identity:
-    key_credential = input('\nPlease input the key_credential\n')
-    if not key_credential:
-        key_identity = key_credential = None
-else:
-    key_identity = key_credential = None
-
-multivalue_separator = input('\nEnter a character to separate mutiple values within a single cell.\nThis character must not be used anywhere in your actual data.\nLeave blank to use the default separator: |\n')
-if not multivalue_separator:
-    multivalue_separator = '|'
-
-# get list of supported resources by this site
-response, content = request(endpoint, 'api_resources')
-available_resources = [resource['o:id'] for resource in json.loads(content)]
-
-resources = ['items', 'item_sets', 'media', 'collecting_items']
-for resource in resources:
-    if (resource not in available_resources):
-        continue
-
+def export(endpoint, resource, query, multivalue_separator, filename=None):
     print('\nExporting ' + resource)
 
     # get all pages
-    data = get_all_pages(endpoint, resource)
+    data = get_all_pages(endpoint, resource, query)
 
     fields = []
     csv_rows = []
@@ -209,8 +186,11 @@ for resource in resources:
         csv_rows.append(csv_row)
 
     fields = sorted(fields, key=lambda field: (field != 'id', field))
-    filename = resource + '.csv'
-    if (py2):
+
+    if filename is None:
+        filename = resource + '.csv'
+
+    if py2:
         o = open(filename, 'wb')
         c = csv.DictWriter(o, [f.encode('utf-8', 'replace') for f in fields], extrasaction='ignore')
         c.writeheader()
@@ -224,3 +204,89 @@ for resource in resources:
             c.writerow(row)
     o.close()
     print('File created: ' + filename)
+
+def main():
+    resources = ['items', 'item_sets', 'media', 'collecting_items']
+    resource_error = False
+    query = {}
+
+    if (len(sys.argv) > 1):
+        parser = argparse.ArgumentParser(
+            prog='omeka-s-csv.py',
+            description='Export to CSV from an Omeka S site using the REST API.\n\nRunning with no arguments will prompt the user for the necessary settings.')
+        parser.add_argument('endpoint', help='API URL for the Omeka S site to export from')
+        parser.add_argument('--resource', help='resource to export (default is to export items, item_sets, media, and collecting_items)')
+        parser.add_argument('--query', help='query string to pass to the API (requires --resource)')
+        parser.add_argument('--multivalue-separator', default='|', help='character to separate multiple values in a cell (default: %(default)s)')
+        parser.add_argument('--filename', help='output path for CSV file (requires --resource, default is <resource>.csv in current directory)')
+        parser.add_argument('--key-identity', help='key identity for authenticated API access (requires --key-credential)')
+        parser.add_argument('--key-credential', help='key credential for authenticated API access (requires --key-identity)')
+        args = parser.parse_args()
+
+        if args.resource is None:
+            if args.query is not None:
+                print('Error: --resource is required when using --query')
+                sys.exit(1)
+            if args.filename is not None:
+                print('Error: --resource is required when using --filename')
+                sys.exit(1)
+
+        if bool(args.key_identity) is not bool(args.key_credential):
+            print('Error: --key-identity and --key-credential must be used together')
+            sys.exit(1)
+
+        endpoint = args.endpoint
+        multivalue_separator = args.multivalue_separator
+        filename = args.filename
+        key_identity = args.key_identity
+        key_credential = args.key_credential
+
+        if args.resource:
+            resources = [args.resource]
+            resource_error = True
+
+        if args.query:
+            query = dict(parse_qsl(args.query))
+            query.pop('page', None)
+            query.pop('limit', None)
+            query.pop('offset', None)
+            query.pop('format', None)
+    else:
+        filename = None
+
+        endpoint = ''
+        while not endpoint:
+            endpoint = input('Enter your Omeka API endpoint\n')
+        endpoint = endpoint.strip().rstrip('/')
+
+        key_identity = input('\nIf you are using an API key, please enter the key_identity now. Otherwise press Enter.\n')
+        if key_identity:
+            key_credential = input('\nPlease input the key_credential\n')
+            if not key_credential:
+                key_identity = key_credential = None
+        else:
+            key_identity = key_credential = None
+
+        multivalue_separator = input('\nEnter a character to separate mutiple values within a single cell.\nThis character must not be used anywhere in your actual data.\nLeave blank to use the default separator: |\n')
+        if not multivalue_separator:
+            multivalue_separator = '|'
+
+    # get list of supported resources by this site
+    response, content = request(endpoint, 'api_resources', {})
+    available_resources = [resource['o:id'] for resource in json.loads(content)]
+
+    if key_identity is not None and key_credential is not None:
+        query["key_identity"] = key_identity
+        query["key_credential"] = key_credential
+
+    for resource in resources:
+        if resource not in available_resources:
+            if resource_error:
+                print('Error: the site does not support the requested resource')
+                sys.exit(1)
+            else:
+                continue
+        export(endpoint, resource, query, multivalue_separator, filename)
+
+if __name__ == '__main__':
+    main()
