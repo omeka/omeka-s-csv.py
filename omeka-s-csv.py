@@ -206,7 +206,7 @@ def export(endpoint, resource, query, multivalue_separator, filename=None):
     print('File created: ' + filename)
 
 def main():
-    resources = ['items', 'item_sets', 'media', 'collecting_items']
+    resources = ['items', 'item_sets', 'media']
     resource_error = False
     query = {}
 
@@ -215,7 +215,7 @@ def main():
             prog='omeka-s-csv.py',
             description='Export to CSV from an Omeka S site using the REST API.\n\nRunning with no arguments will prompt the user for the necessary settings.')
         parser.add_argument('endpoint', help='API URL for the Omeka S site to export from')
-        parser.add_argument('--resource', help='resource to export (default is to export items, item_sets, media, and collecting_items)')
+        parser.add_argument('--resource', help='resource to export (default is to export items, item_sets, and media)')
         parser.add_argument('--query', help='query string to pass to the API (requires --resource)')
         parser.add_argument('--multivalue-separator', default='|', help='character to separate multiple values in a cell (default: %(default)s)')
         parser.add_argument('--filename', help='output path for CSV file (requires --resource, default is <resource>.csv in current directory)')
