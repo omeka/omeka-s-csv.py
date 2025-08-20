@@ -163,7 +163,8 @@ def export(endpoint, resource, query, multivalue_separator, filename=None):
                                 annotation_texts[value_type][annotation_property][annotation_type][annotation_index][value_index] = annotation_val
 
                 for value_type, values in values_by_type.items():
-                    csv_row[k + value_type_suffixes[value_type]] = multivalue_separator.join(values)
+                    if values:
+                        csv_row[k + value_type_suffixes[value_type]] = multivalue_separator.join(values)
 
                 for anno_value_type, anno_props in annotation_texts.items():
                     for anno_prop, anno_types in anno_props.items():
