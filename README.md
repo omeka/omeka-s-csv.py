@@ -42,11 +42,11 @@ That will perform an anonymous export with no API key, and will use the default 
 
 Optional flags allow you to customize other export settings:
 
-### Resource
+#### Resource
 
 By default, the export will run over several different resource types and create multiple files: one each for items, item sets, and media. Passing `--resource <resource_name>` will just perform an export of that one resource type alone.
 
-### Query
+#### Query
 
 If you've selected a resource type with `--resource`, you can filter what's exported by using `--query` and passing a query string. Using this, you can filter your export to any result set that the API supports.
 
@@ -56,7 +56,7 @@ For example, to export only the items that are in the item set with ID 10:
 python3 omeka-s-csv.py https://example.com/api --resource items --query "item_set_id=10"
 ```
 
-### Filename
+#### Filename
 
 If you've selected a resource type with `--resource`, you can choose the path where the exported CSV file will be saved by passing `--filename <path>`.
 
@@ -66,10 +66,10 @@ For example, to export all items to a file named "custom.csv":
 python3 omeka-s-csv.py https://example.com/api --resource items --filename custom.csv
 ```
 
-### Multivalue Separator
+#### Multivalue Separator
 
 You can change the multivalue separator from the default by passing `--multivalue-separator <separator>`.
 
-### API Key
+#### API Key
 
 You can use an API key for an authenticated export by passing `--key-identity <identity>` and `--key-credential <credential>`. You must pass both of these together to use a key; passing just one will result in an error.
